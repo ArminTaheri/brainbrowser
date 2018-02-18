@@ -75,6 +75,8 @@
     overlay_volume.size = SIZE;
     overlay_volume.volumes = [];
     overlay_volume.blend_ratios = [];
+    overlay_volume.color_map_scopes = {};
+    overlay_volume.color_map_functions = {};
 
     overlay_volume.saveOriginAndTransform(header);
 
@@ -206,6 +208,7 @@
           k: v_origin.k
         };
 
+
         for (var c_row = max_row-1; c_row >= min_row; c_row--) {
           var coord = {
             i: row_coord.i,
@@ -223,8 +226,20 @@
                                   Math.round(coord.i) * i_offset +
                                   Math.round(coord.j) * j_offset +
                                   Math.round(coord.k) * k_offset);
-              if (data_index < data_length)
+              if (data_index < data_length) {
+
+                if (this.color_map_functions[i] instanceof Function) {
+                  slice_data[data_index] = this.color_map_functions[i]({
+                      min: intensity_min,
+                      max: intensity_max,
+                    },
+                    this.color_map_scopes[i],
+                    coord,
+                    volume.data[volume_index]
+                  );
+                }
                 slice_data[data_index] = volume.data[volume_index];
+              }
             }
             data_index++;
             coord.i += col_step.di;
@@ -236,13 +251,20 @@
           row_coord.k -= row_step.dk;
         }
 
-        color_map.mapColors(slice_data, {
-          min: intensity_min,
-          max: intensity_max,
-          contrast: contrast,
-          brightness: brightness,
-          destination: target_image.data
-        });
+        if (!(this.color_map_functions[i] instanceof Function)) {
+          color_map.mapColors(slice_data, {
+            min: intensity_min,
+            max: intensity_max,
+            contrast: contrast,
+            brightness: brightness,
+            destination: target_image.data
+          });
+        } else {
+          slice_data = Uint8ClampedArray.from(slice_data);
+          for (let i = 0; let l = slice_data.length; i < slice_data.length; i++) {
+            target_image.data[i] = slice_data[i];
+          }
+        }
 
         images.push(target_image);
       });
@@ -254,6 +276,17 @@
       );
     };
 
+    /* Set an overriding function to compute color maps for a particular overlay index.
+     */
+    overlay_volume.setColormapFunction = function(i, map) {
+      this.color_map_functions[i] = map;
+    }
+
+    /* Set the scope variables of a particular color mapper function
+     */
+    overlay_volume.setColormapFunction = function(i, scope) {
+      this.color_map_scopes[i] = scope;
+    }
     /* Override the getIntensityValue function. The intensity of
      * the overlaid image is defined as the mean of the individual
      * volume intensities, weighted by the blend values.
@@ -352,4 +385,3 @@
   }
 
 }());
-
